@@ -70,7 +70,7 @@ int wmain(
     std::wcout << " ||  |`-'| |  .-.  |  |  .-.  | |  .  '.'  \\ |  | |  ||  |\\    |   " << std::endl;
     std::wcout << "(_'  '--'\\ |  | |  |  |  | |  | |  |\\  \\    `'  '-'  '|  | \\   |   " << std::endl;
     std::wcout << "   `-----' `--' `--'  `--' `--' `--' '--'     `-----' `--'  `--'   " << std::endl;
-    std::wcout << "                                      A UEFI extraction tool" << std::endl;
+    std::wcout << "                                            A UEFI extraction tool" << std::endl;
     std::wcout << std::endl;
 
     if (!privileges::RunningAsAdmin())
@@ -194,7 +194,7 @@ int wmain(
         //
         // Get the size of the entire SPI flash region.
         // 
-        SizeOfImage = pSPIRegisterMapping->BFPREG.PrimaryRegionLimit;
+        SizeOfImage = pSPIRegisterMapping->BFPREG.PRL;
 
         //
         // Align the page and then add 1 to round up the size.
@@ -203,28 +203,37 @@ int wmain(
         SizeOfImage |= 0xfff;
         SizeOfImage++;
 
-        for (int i = 0; i < sizeof(pSPIRegisterMapping->FlashRegion) / 4; i++)
+        for (int i = 0; i < sizeof(pSPIRegisterMapping->FREG) / sizeof(UINT32); i++)
         {
-            if (pSPIRegisterMapping->FlashRegion[i] != NULL &&
-                pSPIRegisterMapping->FlashRegion[i] != 0x7fff)
+            //
+            // Ensure the following conditions are met:
+            //   1. The value is not NULL. 
+            //   2. Ensure the base is not higher than the limit. If it is, this means 
+            //      the region is not being used. 
+            //
+            if (pSPIRegisterMapping->FREG[i].value != NULL &&
+                pSPIRegisterMapping->FREG[i].RB < pSPIRegisterMapping->FREG[i].RL)
             {
                 PSECTION_INFORMATION psi = new SECTION_INFORMATION();
 
                 BIOS_BFPREG bfpr = { 0 };
 
-                bfpr.value = pSPIRegisterMapping->FlashRegion[i];
+                bfpr.value = pSPIRegisterMapping->FREG[i].value;
 
                 // 
                 // Get the base of the section.
                 // 
-                psi->BaseImage = bfpr.PrimaryRegionBase;
+                psi->BaseImage = bfpr.PRB;
 
                 //
                 // Get the size of the image with the limit. 
                 // 
-                psi->SectionSize = bfpr.PrimaryRegionLimit + 1;
+                psi->SectionSize = bfpr.PRL + 1;
                 psi->SectionSize -= psi->BaseImage;
 
+                //
+                // Align the base address and the size by page.
+                // 
                 psi->BaseImage <<= 12;
                 psi->SectionSize <<= 12;
 
@@ -268,11 +277,11 @@ int wmain(
             {
                 for (int i = 0; i < 16; i++)
                 {
-                    pdata.push_back(pSPIRegisterMapping->FlashData[i]);
+                    pdata.push_back(pSPIRegisterMapping->FDATA[i]);
                 }
             }
 
-            pSPIRegisterMapping->FADDR.FLA += 64;
+            pSPIRegisterMapping->FADDR.FLA += SPI_MAX_SIZE;
         } while (pSPIRegisterMapping->FADDR.FLA != please[0]->BaseImage);
 
         //
@@ -305,10 +314,10 @@ int wmain(
                 {
                     for (int i = 0; i < 16; i++)
                     {
-                        pdata.push_back(pSPIRegisterMapping->FlashData[i]);
+                        pdata.push_back(pSPIRegisterMapping->FDATA[i]);
                     }
 
-                    pSPIRegisterMapping->FADDR.FLA += 64;
+                    pSPIRegisterMapping->FADDR.FLA += SPI_MAX_SIZE;
                 }
                 else
                 {
@@ -334,12 +343,12 @@ int wmain(
         //
         // Read SPI flash memory starting from the primary region base. 
         // 
-        UINT32 PrimaryRegionBase = pSPIRegisterMapping->BFPREG.PrimaryRegionBase;
+        UINT32 PrimaryRegionBase = pSPIRegisterMapping->BFPREG.PRB;
 
         // 
         // Get the size of the image with the limit and the primary region base.
         //
-        SizeOfImage = pSPIRegisterMapping->BFPREG.PrimaryRegionLimit + 1;
+        SizeOfImage = pSPIRegisterMapping->BFPREG.PRL + 1;
         SizeOfImage -= PrimaryRegionBase;
 
         //
@@ -380,11 +389,11 @@ int wmain(
             {
                 for (int i = 0; i < 16; i++)
                 {
-                    pdata.push_back(pSPIRegisterMapping->FlashData[i]);
+                    pdata.push_back(pSPIRegisterMapping->FDATA[i]);
                 }
             }
 
-            pSPIRegisterMapping->FADDR.FLA += 64;
+            pSPIRegisterMapping->FADDR.FLA += SPI_MAX_SIZE;
         } while (pSPIRegisterMapping->FADDR.FLA < PrimaryRegionBase + SizeOfImage);
     }
 
@@ -400,7 +409,7 @@ int wmain(
     );
     if (hFile != INVALID_HANDLE_VALUE)
     {
-        if (!WriteFile(hFile, pdata.data(), pdata.size() * 4, NULL, NULL))
+        if (!WriteFile(hFile, pdata.data(), pdata.size() * sizeof(DWORD), NULL, NULL))
         {
             std::wcerr << "uh-oh!" << std::endl;
             std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
@@ -421,13 +430,30 @@ int wmain(
         hFile = INVALID_HANDLE_VALUE;
     }
 
-    for (auto i : please)
+    //
+    // Clear up the pdata vector.
+    // 
+    if (!pdata.empty())
     {
-        RtlSecureZeroMemory(i, sizeof(SECTION_INFORMATION));
-        delete i;
-        i = nullptr;
+        pdata.clear();
     }
 
+    //
+    // Clean up the allocated memory if there are items inside this vector. 
+    //
+    if (!please.empty())
+    {
+        for (auto& i : please)
+        {
+            RtlSecureZeroMemory(i, sizeof(SECTION_INFORMATION));
+            delete i;
+            i = nullptr;
+        }
+    }
+
+    //
+    // Unmap the address. 
+    //
     if (pSPIRegisterMapping != nullptr)
     {
         if (!pIntelPmxClient->UnmapMappedMemory(pSPIRegisterMapping))
