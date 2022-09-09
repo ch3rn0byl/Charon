@@ -14,6 +14,8 @@ Options:
   -o, --output          Outputs to a file specified. Default is image.bin
 ```
 
+![](https://github.com/ch3rn0byl/Charon/blob/master/Images/screenie.png)
+
 ## How does it work?
 The UEFI image lies in SPI flash memory and is readable by interacting with the SPI controller on the target system. The SPI Base Address, or SPIBAR, could be found at bus 0 device 31 function 5 offset 16. The physical address will then get mapped into the callee's userspace and begin to interact with the SPI controller via SPI memory mapped registers.  
 
@@ -21,7 +23,8 @@ If the `--dump-all` option is selected, the base addresses for all the modules w
 
 If the `--uefi-only` option is selected, the base address of the UEFI image is determined by reading the BIOS Flash Primary Region. 
 
-image 
+This entire process could be viewed in realtime by monitoring the SPI controller:
+![](https://github.com/ch3rn0byl/Charon/blob/master/Images/ExtractingImage.gif)
 
 The limitation for reading the UEFI image is it could only read 64 bytes at a time so it will take a few minutes to extract the UEFI image from the Flash Data registers.
 
@@ -30,4 +33,4 @@ Interested in the more gritty details? Rootkits and Bootkits goes more in depth 
 ## Build  
 If you are feeling adventurous, making the necessary changes and compiling within the solution would be ideal; otherwise, the CI builds Charon on Windows using the latest Visual Studio 2022 environment. The compiled Windows binary for Charon could be found either in the CI artifacts or in the Release sections.
 
-Shoutout to @tandasat and @matrosov for some of the questions I had -- thank you! 
+Shoutout to [@tandasat](https://github.com/tandasat/) and [@matrosov](https://github.com/matrosov) for some of the questions I had -- thank you! 
