@@ -250,6 +250,8 @@ bool Charon::IsProcessorSupported()
 	std::string VendorId(Cpuid::MAX_CPUID_BUFFER, '\0');
 	std::string ProcessorBrand(Cpuid::MAX_CPUID_BUFFER, '\0');
 
+	const char* szIntel = "GenuineIntel";
+
 	Cpuid::CPUID_BASIC_INFORMATION BasicInformation = { 0 };
 
 	__cpuidex(reinterpret_cast<int*>(&BasicInformation), static_cast<int>(Cpuid::CPUID_LEAF::BASIC_INFORMATION), 0);
@@ -258,7 +260,7 @@ bool Charon::IsProcessorSupported()
 	*reinterpret_cast<int*>(&VendorId[4]) = BasicInformation.edx;
 	*reinterpret_cast<int*>(&VendorId[8]) = BasicInformation.ecx;
 
-	return VendorId == "GenuineIntel";
+	return strncmp(VendorId.c_str(), szIntel, strlen(szIntel)) == 0;
 }
 
 _Use_decl_annotations_

@@ -314,6 +314,7 @@ namespace DataTypes
 			BIOS_SFDP0_VSCC0 VendorSpecificComponentCapabilities0;
 			BIOS_SFDP1_VSCC1 VendorSpecificComponentCapabilities1;
 			BIOS_PTINX ParameterTableIndex;
+			BIOS_PTDATA ParameterTableData;
 			BIOS_SBRS SpiBusRequesterStatus;
 		};
 
