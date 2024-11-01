@@ -79,53 +79,7 @@ int wmain(
         return EXIT_FAILURE;
     }
 
-    if (argc <= 1)
-    {
-        PrintUsage(wargv[0]);
-        return EXIT_FAILURE;
-    }
-    else
-    {
-        for (int i = 0; i < argc; i++)
-        {
-            if (wcscmp(wargv[i], L"-h") == 0 || wcscmp(wargv[i], L"--help") == 0)
-            {
-                PrintUsage(wargv[0]);
-                return EXIT_SUCCESS;
-            }
-            else if (wcscmp(wargv[i], L"-o") == 0 || wcscmp(wargv[i], L"--output") == 0)
-            {
-                Outfile = wargv[i + 1];
-            }
-            else if (wcscmp(wargv[i], L"-d") == 0 || wcscmp(wargv[i], L"--dump-all") == 0)
-            {
-                bDumpAll = true;
-            }
-            else if (wcscmp(wargv[i], L"-u") == 0 || wcscmp(wargv[i], L"--uefi-only") == 0)
-            {
-                bUefiOnly = true;
-            }
-        }
-
-        if (!bDumpAll && !bUefiOnly)
-        {
-            std::wcerr << "[!] A required parameter is missing: -d/--dump-all or -u/--uefi-only." << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
-
-    //
-    // Get the time as of now and then get it again later to see how long the application
-    // took to run.
-    // 
-    auto start = std::chrono::system_clock::now();
-    std::time_t StartTime = std::chrono::system_clock::to_time_t(start);
-
-    //
-    // std::endl is not included because std::ctime() inserts a newline.
-    // 
-    std::wcout << "[+] " << wargv[0] << " starting " << std::ctime(&StartTime);
-
+    /*
     pServiceController = std::make_unique<ServiceController>();
     pIntelPmxClient = std::make_unique<IntelPmxClient>();
 
@@ -185,6 +139,143 @@ int wmain(
         std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
         return EXIT_FAILURE;
     }
+
+    std::wcout << "[+] Memory mapped successfully: " << pSPIRegisterMapping << std::endl;
+
+	PUINT8 testing = reinterpret_cast<PUINT8>(pSPIRegisterMapping);
+
+    for (ULONG i = 0; i < 0xff; i++)
+    {
+		std::printf("%02x ", testing[i]);
+    }
+    std::printf("\n");
+
+    //
+    // Unmap the address. 
+    //
+    if (pSPIRegisterMapping != nullptr)
+    {
+        if (!pIntelPmxClient->UnmapMappedMemory(pSPIRegisterMapping))
+        {
+            std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        pSPIRegisterMapping = nullptr;
+    }
+    */
+
+    /*
+    if (argc <= 1)
+    {
+        PrintUsage(wargv[0]);
+        return EXIT_FAILURE;
+    }
+    else
+    {
+        for (int i = 0; i < argc; i++)
+        {
+            if (wcscmp(wargv[i], L"-h") == 0 || wcscmp(wargv[i], L"--help") == 0)
+            {
+                PrintUsage(wargv[0]);
+                return EXIT_SUCCESS;
+            }
+            else if (wcscmp(wargv[i], L"-o") == 0 || wcscmp(wargv[i], L"--output") == 0)
+            {
+                Outfile = wargv[i + 1];
+            }
+            else if (wcscmp(wargv[i], L"-d") == 0 || wcscmp(wargv[i], L"--dump-all") == 0)
+            {
+                bDumpAll = true;
+            }
+            else if (wcscmp(wargv[i], L"-u") == 0 || wcscmp(wargv[i], L"--uefi-only") == 0)
+            {
+                bUefiOnly = true;
+            }
+        }
+
+        if (!bDumpAll && !bUefiOnly)
+        {
+            std::wcerr << "[!] A required parameter is missing: -d/--dump-all or -u/--uefi-only." << std::endl;
+            return EXIT_FAILURE;
+        }
+    }
+
+    //
+    // Get the time as of now and then get it again later to see how long the application
+    // took to run.
+    // 
+    auto start = std::chrono::system_clock::now();
+    std::time_t StartTime = std::chrono::system_clock::to_time_t(start);
+
+    //
+    // std::endl is not included because std::ctime() inserts a newline.
+    // 
+    std::wcout << "[+] " << wargv[0] << " starting " << std::ctime(&StartTime);
+    */
+
+    pServiceController = std::make_unique<ServiceController>();
+    pIntelPmxClient = std::make_unique<IntelPmxClient>();
+
+    //
+    // Dump the driver to disk.
+    // 
+    if (!pServiceController->DumpDataBlobToDisk())
+    {
+        std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    //
+    // Create the service to interact with the driver.
+    // 
+    if (!pServiceController->StartKernelService())
+    {
+        std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    //
+    // Initialize Intel's driver for use. 
+    // 
+    if (!pIntelPmxClient->init(L"\\\\.\\Pmxdrv"))
+    {
+        std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    //
+    // Get the user's chip information.
+    // 
+    ProcessorInformation = pIntelPmxClient->GetProcessorInformation();
+    std::wcout << "[+] Processor Information: " << ProcessorInformation.c_str() << std::endl;
+
+    //
+    // The SPI controller's physical address can be found by querying BAR0 of the 
+    // PCI. This entry is at offset 0x10. 
+    // 
+    if (!pIntelPmxClient->ReadIOPort(pIntelPmxClient->GetPCIValue(0, 31, 5, 0x10), &SPIPhysicalMemory))
+    {
+        std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::wcout << std::hex << "[+] SPI located at " << SPIPhysicalMemory << "." << std::endl;
+
+    /*
+
+    //
+    // Map the memory into userspace to be able to read and write to it. 
+    // 
+    if (!pIntelPmxClient->MapPhysicalMemory(
+        SPIPhysicalMemory,
+        reinterpret_cast<PVOID*>(&pSPIRegisterMapping))
+        )
+    {
+        std::wcerr << __FUNCTIONW__ << ":" << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+    }
+
 
     //
     // Dump the entire SPI flash region.
@@ -474,6 +565,8 @@ int wmain(
 
     std::wcout << "[+] " << wargv[0] << " ending " << std::ctime(&EndTime);
     std::wcout << "[+] This process took " << duration.count() << " seconds." << std::endl;
+    */
+
     std::wcout << "[+] Done." << std::endl;
     return EXIT_SUCCESS;
 }
