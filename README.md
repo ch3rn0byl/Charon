@@ -13,7 +13,7 @@ Options:
   -o, --output          Outputs to a file specified. Default is image.bin
 ```
 
-![](https://github.com/ch3rn0byl/Charon/blob/master/Images/screenie.png)
+![](https://github.com/ch3rn0byl/Charon/blob/master/Images/Untitled.png)
 
 ## How does it work?
 The UEFI image lies in SPI flash memory and is readable by interacting with the SPI controller on the target system. The SPI Base Address, or SPIBAR, could be found at bus 0 device 31 function 5 offset 16. The physical address will then get mapped into the callee's userspace and begin to interact with the SPI controller via SPI memory mapped registers.  
